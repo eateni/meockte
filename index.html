@@ -404,20 +404,26 @@ body {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
           <div>
             <div style="font-size:11px;color:#4a8ab5;margin-bottom:5px">총 라운드 수</div>
-            <select class="row-sel" id="totalRounds" style="width:100%" onchange="updateRoundTypeSelectors()">
+            <select class="row-sel" id="totalRounds" style="width:100%" onchange="generatedAllRounds=[];updateRoundTypeSelectors()">
               <option value="2">2라운드</option>
               <option value="3" selected>3라운드</option>
               <option value="4">4라운드</option>
               <option value="5">5라운드</option>
               <option value="6">6라운드</option>
+              <option value="7">7라운드</option>
+              <option value="8">8라운드</option>
             </select>
           </div>
           <div>
             <div style="font-size:11px;color:#4a8ab5;margin-bottom:5px">코트 수</div>
-            <select class="row-sel" id="rndCourts" style="width:100%" onchange="updateRoundTypeSelectors()">
+            <select class="row-sel" id="rndCourts" style="width:100%" onchange="generatedAllRounds=[];updateRoundTypeSelectors()">
               <option value="2" selected>2코트</option>
               <option value="3">3코트</option>
               <option value="4">4코트</option>
+              <option value="5">5코트</option>
+              <option value="6">6코트</option>
+              <option value="7">7코트</option>
+              <option value="8">8코트</option>
             </select>
           </div>
         </div>
@@ -974,7 +980,7 @@ function generatePairing(type, numCourts) {
 }
 
 // ── 라운드별 코트 방식 선택 UI ────────────────────────────────────
-const COURT_NAMES = ['A코트','B코트','C코트','D코트'];
+const COURT_NAMES = ['A코트','B코트','C코트','D코트','E코트','F코트','G코트','H코트'];
 const TYPE_OPTS = ['혼복','남복','여복'];
 const TYPE_COLOR = { '혼복':'#a78bfa','남복':'#60a5fa','여복':'#f472b6','랠리':'#34d399' };
 const TYPE_BG    = { '혼복':'rgba(124,58,237,0.25)','남복':'rgba(37,99,235,0.25)','여복':'rgba(236,72,153,0.25)','랠리':'rgba(52,211,153,0.25)' };
@@ -987,7 +993,7 @@ function updateRoundTypeSelectors() {
 
   // 기존 값 보존
   const prev = {};
-  for (let r=0;r<10;r++) for (let c=0;c<4;c++) {
+  for (let r=0;r<10;r++) for (let c=0;c<8;c++) {
     const s = document.getElementById(`ct_${r}_${c}`);
     if (s) prev[`${r}_${c}`] = s.value;
   }
@@ -1836,6 +1842,166 @@ window.renderAnalysisDetail = function() {
     ${worstPart.map(p=>pairCard(p,'😅 아쉬운 파트너:')).join('')}
     ${worstOpp.map(p=>pairCard(p,'💀 천적:')).join('')}
     ` : ''}
+
+    <!-- 📈 최근 폼 -->
+    ${(() => {
+      const recentMatches = [];
+      allRounds().sort((a,b)=>(b.date||'')>(a.date||'')?1:-1).forEach(r => {
+        (r.matches||[]).forEach(m => {
+          if (!m.done) return;
+          const inT1=(m.team1||[]).includes(name), inT2=(m.team2||[]).includes(name);
+          if (!inT1&&!inT2) return;
+          const mySc=inT1?m.score1:m.score2, oppSc=inT1?m.score2:m.score1;
+          recentMatches.push({res:mySc>oppSc?'W':mySc<oppSc?'L':'D', date:r.date||''});
+        });
+      });
+      const last5 = recentMatches.slice(0,5);
+      if (!last5.length) return '';
+      const resColor = {W:'#34d399',L:'#f87171',D:'#fbbf24'};
+      const resBg = {W:'rgba(52,211,153,0.2)',L:'rgba(248,113,113,0.2)',D:'rgba(251,191,36,0.2)'};
+      const recentWr = last5.length>0?Math.round(last5.filter(x=>x.res==='W').length/last5.length*100):0;
+      return `
+      <div style="font-size:14px;font-weight:800;color:#34d399;margin:20px 0 10px">📈 최근 폼</div>
+      <div style="background:rgba(8,28,75,0.75);border-radius:12px;padding:14px;border:1px solid rgba(50,110,200,0.25)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="display:flex;gap:6px">
+            ${last5.map(r=>`<div style="width:36px;height:36px;border-radius:8px;background:${resBg[r.res]};border:1px solid ${resColor[r.res]}40;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:${resColor[r.res]}">${r.res}</div>`).join('')}
+          </div>
+          <div style="margin-left:8px">
+            <div style="font-size:13px;font-weight:700;color:#e8edf2">최근 ${last5.length}경기</div>
+            <div style="font-size:11px;color:#4a8ab5">${last5.filter(x=>x.res==='W').length}승 ${last5.filter(x=>x.res==='D').length}무 ${last5.filter(x=>x.res==='L').length}패 · ${recentWr}%</div>
+          </div>
+        </div>
+        <div class="wr-bg"><div class="wr-bar" style="width:${recentWr}%;background:${recentWr>=70?'linear-gradient(90deg,#34d399,#10b981)':recentWr>=40?'linear-gradient(90deg,#fbbf24,#f59e0b)':'linear-gradient(90deg,#f87171,#ef4444)'}"></div></div>
+      </div>`;
+    })()}
+
+    <!-- 🔥 연승/연패 기록 -->
+    ${(() => {
+      const allMatchResults = [];
+      allRounds().sort((a,b)=>(a.date||'')>(b.date||'')?1:-1).forEach(r => {
+        (r.matches||[]).forEach(m => {
+          if (!m.done) return;
+          const inT1=(m.team1||[]).includes(name), inT2=(m.team2||[]).includes(name);
+          if (!inT1&&!inT2) return;
+          const mySc=inT1?m.score1:m.score2, oppSc=inT1?m.score2:m.score1;
+          allMatchResults.push(mySc>oppSc?'W':mySc<oppSc?'L':'D');
+        });
+      });
+      if (!allMatchResults.length) return '';
+      // 현재 연승/연패
+      let curStreak=1, curType=allMatchResults[allMatchResults.length-1];
+      for(let i=allMatchResults.length-2;i>=0;i--){if(allMatchResults[i]===curType)curStreak++;else break;}
+      // 최장 연승
+      let maxWin=0,cur=0;
+      allMatchResults.forEach(r=>{if(r==='W'){cur++;maxWin=Math.max(maxWin,cur);}else cur=0;});
+      // 최장 연패
+      let maxLoss=0; cur=0;
+      allMatchResults.forEach(r=>{if(r==='L'){cur++;maxLoss=Math.max(maxLoss,cur);}else cur=0;});
+      const streakColor=curType==='W'?'#34d399':curType==='L'?'#f87171':'#fbbf24';
+      const streakText=curType==='W'?'연승':curType==='L'?'연패':'연속무';
+      return `
+      <div style="font-size:14px;font-weight:800;color:#f59e0b;margin:20px 0 10px">🔥 연승/연패 기록</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:rgba(8,28,75,0.75);border-radius:10px;padding:12px;text-align:center;border:1px solid ${streakColor}44">
+          <div style="font-size:22px;font-weight:900;color:${streakColor}">${curStreak}</div>
+          <div style="font-size:11px;color:#4a8ab5;margin-top:2px">현재 ${streakText}</div>
+        </div>
+        <div style="background:rgba(8,28,75,0.75);border-radius:10px;padding:12px;text-align:center;border:1px solid rgba(52,211,153,0.25)">
+          <div style="font-size:22px;font-weight:900;color:#34d399">${maxWin}</div>
+          <div style="font-size:11px;color:#4a8ab5;margin-top:2px">최장 연승</div>
+        </div>
+        <div style="background:rgba(8,28,75,0.75);border-radius:10px;padding:12px;text-align:center;border:1px solid rgba(248,113,113,0.25)">
+          <div style="font-size:22px;font-weight:900;color:#f87171">${maxLoss}</div>
+          <div style="font-size:11px;color:#4a8ab5;margin-top:2px">최장 연패</div>
+        </div>
+      </div>`;
+    })()}
+
+    <!-- 📅 월별 성적 추이 -->
+    ${(() => {
+      const monthly = {};
+      allRounds().forEach(r => {
+        if (!r.date) return;
+        const mon = r.date.slice(0,7); // YYYY-MM
+        (r.matches||[]).forEach(m => {
+          if (!m.done) return;
+          const inT1=(m.team1||[]).includes(name), inT2=(m.team2||[]).includes(name);
+          if (!inT1&&!inT2) return;
+          const mySc=inT1?m.score1:m.score2, oppSc=inT1?m.score2:m.score1;
+          if (!monthly[mon]) monthly[mon]={wins:0,losses:0,draws:0,games:0};
+          monthly[mon].games++;
+          if(mySc>oppSc)monthly[mon].wins++; else if(mySc<oppSc)monthly[mon].losses++; else monthly[mon].draws++;
+        });
+      });
+      const months = Object.keys(monthly).sort();
+      if (months.length < 2) return '';
+      const maxGames = Math.max(...months.map(m=>monthly[m].games));
+      return `
+      <div style="font-size:14px;font-weight:800;color:#a78bfa;margin:20px 0 10px">📅 월별 성적 추이</div>
+      <div style="background:rgba(8,28,75,0.75);border-radius:12px;padding:14px;border:1px solid rgba(50,110,200,0.25)">
+        ${months.map(mon => {
+          const d=monthly[mon];
+          const wr=d.games>0?Math.round(d.wins/d.games*100):0;
+          const monLabel=mon.slice(0,4)+'년 '+parseInt(mon.slice(5))+'월';
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span style="color:#e8edf2;font-weight:600">${monLabel}</span>
+              <span style="color:#4a8ab5">${d.wins}승 ${d.draws}무 ${d.losses}패 · <span style="color:${wr>=50?'#34d399':'#f87171'};font-weight:700">${wr}%</span></span>
+            </div>
+            <div style="display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden;background:rgba(3,12,45,0.5)">
+              <div style="width:${d.games>0?Math.round(d.wins/d.games*100):0}%;background:#34d399;transition:width 0.5s"></div>
+              <div style="width:${d.games>0?Math.round(d.draws/d.games*100):0}%;background:#fbbf24;transition:width 0.5s"></div>
+              <div style="width:${d.games>0?Math.round(d.losses/d.games*100):0}%;background:#f87171;transition:width 0.5s"></div>
+            </div>
+          </div>`;
+        }).join('')}
+        <div style="display:flex;gap:12px;margin-top:6px;font-size:10px">
+          <span><span style="color:#34d399">■</span> 승</span>
+          <span><span style="color:#fbbf24">■</span> 무</span>
+          <span><span style="color:#f87171">■</span> 패</span>
+        </div>
+      </div>`;
+    })()}
+
+    <!-- ⏱️ 라운드별 강세 -->
+    ${(() => {
+      const byRound = {};
+      allRounds().forEach(r => {
+        (r.matches||[]).forEach((m,mi) => {
+          if (!m.done) return;
+          const inT1=(m.team1||[]).includes(name), inT2=(m.team2||[]).includes(name);
+          if (!inT1&&!inT2) return;
+          const mySc=inT1?m.score1:m.score2, oppSc=inT1?m.score2:m.score1;
+          // 라운드명에서 번호 추출
+          const rNum = r.name ? r.name.replace(/[^0-9]/g,'') : '';
+          const key = rNum ? `${rNum}라운드` : r.name||'기타';
+          if (!byRound[key]) byRound[key]={wins:0,losses:0,draws:0,games:0};
+          byRound[key].games++;
+          if(mySc>oppSc)byRound[key].wins++; else if(mySc<oppSc)byRound[key].losses++; else byRound[key].draws++;
+        });
+      });
+      const rounds = Object.keys(byRound).sort((a,b)=>parseInt(a)-parseInt(b));
+      if (rounds.length < 2) return '';
+      return `
+      <div style="font-size:14px;font-weight:800;color:#60a5fa;margin:20px 0 10px">⏱️ 라운드별 강세</div>
+      <div style="background:rgba(8,28,75,0.75);border-radius:12px;padding:14px;border:1px solid rgba(50,110,200,0.25)">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px">
+          ${rounds.map(rk => {
+            const d=byRound[rk];
+            const wr=d.games>0?Math.round(d.wins/d.games*100):0;
+            const barColor=wr>=70?'#34d399':wr>=50?'#60a5fa':wr>=30?'#fbbf24':'#f87171';
+            return `<div style="text-align:center;background:rgba(3,12,45,0.6);border-radius:10px;padding:10px 6px;border:1px solid ${barColor}33">
+              <div style="font-size:11px;color:#4a8ab5;margin-bottom:4px">${rk}</div>
+              <div style="font-size:18px;font-weight:900;color:${barColor}">${wr}%</div>
+              <div style="font-size:10px;color:#4a8ab5;margin-top:2px">${d.wins}승${d.losses}패</div>
+              <div class="wr-bg" style="margin-top:4px"><div class="wr-bar" style="width:${wr}%;background:${barColor}"></div></div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="font-size:10px;color:#4a8ab5;margin-top:10px">* 체력이 좋을수록 후반 라운드 승률이 높아요</div>
+      </div>`;
+    })()}
 
     <!-- 🎾 포지션별 득실 분석 -->
     <div style="font-size:14px;font-weight:800;color:#60a5fa;margin:16px 0 10px">🎾 포지션별 득실 분석</div>
