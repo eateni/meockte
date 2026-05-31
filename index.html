@@ -207,6 +207,7 @@ body {
     <div class="main-tabs">
       <button class="tab-btn active" onclick="switchTab('league',this)">🏆 정규리그</button>
       <button class="tab-btn" onclick="switchTab('terra',this)">⚡ 개인별 게임 기록</button>
+      <button class="tab-btn" onclick="switchTab('fortune',this)">🔮 오늘의 운세</button>
       <button class="tab-btn" onclick="switchTab('event',this)">🎉 이벤트전</button>
       <button class="tab-btn" id="adminTabBtn" style="display:none" onclick="switchTab('admin',this)">⚙️ 관리자</button>
     </div>
@@ -288,6 +289,40 @@ body {
         <div style="font-size:15px;font-weight:800;color:#e8edf2;margin-bottom:12px">📊 게임 기록 통계</div>
         <div id="terraStatsList"><div class="loading">불러오는 중...</div></div>
       </div>
+    </div>
+
+    <!-- 🔮 오늘의 운세 -->
+    <div id="tab-fortune" style="display:none">
+      <div style="margin-top:16px"></div>
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:28px;margin-bottom:6px">🔮</div>
+        <div style="font-size:20px;font-weight:900;color:#a78bfa">오늘의 테니스 운세</div>
+        <div style="font-size:11px;color:#4a8ab5;margin-top:4px" id="fortuneDate"></div>
+      </div>
+
+      <!-- 회원 선택 -->
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:#4a8ab5;margin-bottom:6px">내 이름 선택</div>
+        <select id="fortuneNameSel" class="row-sel" style="width:100%;font-size:14px;padding:11px">
+          <option value="">이름을 선택하세요</option>
+        </select>
+      </div>
+
+      <!-- 생년월일 입력 -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:#4a8ab5;margin-bottom:6px">생년월일 입력 <span style="color:#4a6a8a">(운세 정확도 향상)</span></div>
+        <input type="date" id="fortuneBirth" class="row-inp"
+          style="width:100%;font-size:14px;padding:11px"
+          placeholder="생년월일">
+        <div style="font-size:10px;color:#4a6a8a;margin-top:4px">* 저장되지 않아요. 매번 입력하거나 기억해두세요 😊</div>
+      </div>
+
+      <button onclick="getFortune()"
+        style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:16px;box-shadow:0 4px 16px rgba(124,58,237,0.4)">
+        🔮 오늘의 운세 보기
+      </button>
+
+      <div id="fortuneResult"></div>
     </div>
 
     <!-- 이벤트전 -->
@@ -2080,6 +2115,50 @@ window.renderAnalysisDetail = function() {
     ${posCard('fore','포(Fore)','#ef4444','🔴')}
     ${posCard('back','백(Back)','#3b82f6','🔵')}
 
+    <!-- 🏸 경기 방식별 승률 -->
+    ${(() => {
+      const typeStats = { '혼복':{wins:0,losses:0,draws:0,games:0}, '남복':{wins:0,losses:0,draws:0,games:0}, '여복':{wins:0,losses:0,draws:0,games:0} };
+      allRounds().forEach(r => {
+        (r.matches||[]).forEach(m => {
+          if (!m.done) return;
+          const inT1=(m.team1||[]).includes(name), inT2=(m.team2||[]).includes(name);
+          if (!inT1&&!inT2) return;
+          const tag = m.tag||'혼복';
+          if (!typeStats[tag]) return;
+          const mySc=inT1?m.score1:m.score2, oppSc=inT1?m.score2:m.score1;
+          typeStats[tag].games++;
+          if(mySc>oppSc) typeStats[tag].wins++;
+          else if(mySc<oppSc) typeStats[tag].losses++;
+          else typeStats[tag].draws++;
+        });
+      });
+      // 성별에 따라 보여줄 방식 결정
+      const showTypes = s.gender==='m'
+        ? [['혼복','혼복','#a78bfa','rgba(124,58,237,0.2)'],['남복','남복','#60a5fa','rgba(37,99,235,0.2)']]
+        : [['혼복','혼복','#a78bfa','rgba(124,58,237,0.2)'],['여복','여복','#f472b6','rgba(236,72,153,0.2)']];
+      const hasData = showTypes.some(([k])=>typeStats[k].games>0);
+      if (!hasData) return '';
+      return `
+      <div style="font-size:14px;font-weight:800;color:#a78bfa;margin:16px 0 10px">
+        ${s.gender==='m'?'🎾 남복 / 혼복 승률':'🎾 여복 / 혼복 승률'}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${showTypes.map(([key,label,color,bg])=>{
+          const d=typeStats[key];
+          const wr=d.games>0?Math.round(d.wins/d.games*100):0;
+          return `<div style="background:rgba(8,28,75,0.75);border-radius:10px;padding:12px;border:1px solid ${color}44">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:12px;font-weight:700;color:${color}">${label}</span>
+              <span style="font-size:11px;color:#4a8ab5">${d.games}게임</span>
+            </div>
+            <div style="font-size:22px;font-weight:900;color:${wr>=50?'#34d399':'#f87171'};margin-bottom:4px">${wr}%</div>
+            <div style="font-size:11px;color:#4a8ab5">${d.wins}승 ${d.draws}무 ${d.losses}패</div>
+            <div class="wr-bg" style="margin-top:6px"><div class="wr-bar" style="width:${wr}%;background:${wr>=70?'linear-gradient(90deg,#34d399,#10b981)':wr>=50?'linear-gradient(90deg,#60a5fa,#3b82f6)':'linear-gradient(90deg,#f87171,#ef4444)'}"></div></div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    })()}
+
     <!-- 🤝 파트너별 상세 기록 -->
     ${partners.length ? `
     <div style="font-size:14px;font-weight:800;color:#f59e0b;margin:20px 0 10px">🤝 파트너별 상세 기록</div>
@@ -2405,10 +2484,165 @@ function renderAdmin(){
 
 // 탭
 window.switchTab=function(tab,btn){
-  ['league','terra','event','admin'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
+  ['league','terra','fortune','event','admin'].forEach(t=>{
+    const el=document.getElementById('tab-'+t);
+    if(el) el.style.display=t===tab?'block':'none';
+  });
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   if(tab==='terra') { updateTerraSelects(); renderTerraMyRecords(); }
+  if(tab==='fortune') initFortune();
+};
+
+// ── 운세 ──────────────────────────────────────────────────────────
+function initFortune() {
+  const today = new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  const dateEl = document.getElementById('fortuneDate');
+  if(dateEl) dateEl.textContent = today;
+  const sel = document.getElementById('fortuneNameSel');
+  if(sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">이름을 선택하세요</option>' +
+      allPlayers().map(p=>`<option value="${p.name}">${p.name} ${p.gender==='f'?'♀':'♂'}</option>`).join('');
+    if(cur) sel.value = cur;
+  }
+}
+
+window.getFortune = async function() {
+  const name = document.getElementById('fortuneNameSel').value;
+  const birth = document.getElementById('fortuneBirth').value;
+  if(!name){ alert('이름을 선택해주세요'); return; }
+  if(!birth){ alert('생년월일을 입력해주세요'); return; }
+
+  const el = document.getElementById('fortuneResult');
+  el.innerHTML = `<div style="text-align:center;padding:30px;color:#a78bfa">
+    <div style="font-size:32px;margin-bottom:12px">🔮</div>
+    <div style="font-size:14px">사주를 분석하는 중...</div>
+    <div style="font-size:11px;color:#4a8ab5;margin-top:6px">오행의 기운을 읽고 있어요</div>
+  </div>`;
+
+  // ── 사주 계산 ──
+  const 천간 = ['甲갑','乙을','丙병','丁정','戊무','己기','庚경','辛신','壬임','癸계'];
+  const 지지 = ['子자','丑축','寅인','卯묘','辰진','巳사','午오','未미','申신','酉유','戌술','亥해'];
+  const 띠이름 = ['쥐','소','호랑이','토끼','용','뱀','말','양','원숭이','닭','개','돼지'];
+  const 오행천간 = ['목','목','화','화','토','토','금','금','수','수'];
+  const 오행한자 = {목:'木🌿',화:'火🔥',토:'土🌍',금:'金⚙️',수:'水💧'};
+  const 음양천간 = ['양','음','양','음','양','음','양','음','양','음'];
+
+  const bd = new Date(birth);
+  const by = bd.getFullYear(), bm = bd.getMonth()+1, bday = bd.getDate();
+
+  const 년간idx = (by-4)%10; const 년지idx = (by-4)%12;
+  const 년간 = 천간[년간idx]; const 년지 = 지지[년지idx];
+  const 띠 = 띠이름[년지idx];
+
+  const 월경계 = [6,4,6,5,6,6,7,8,8,8,7,7];
+  const 월지idx = bday >= 월경계[bm-1] ? (bm+1)%12 : bm%12;
+  const 월간idx = ((by-4)%5*2 + 월지idx) % 10;
+  const 월간 = 천간[월간idx]; const 월지 = 지지[월지idx];
+
+  function julianDay(y,m,d){if(m<=2){y--;m+=12;}const A=Math.floor(y/100),B=2-A+Math.floor(A/4);return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524;}
+  const jd = julianDay(by,bm,bday);
+  const 일간idx=(jd+9)%10; const 일지idx=(jd+1)%12;
+  const 일간=천간[일간idx]; const 일지=지지[일지idx];
+  const 일간오행=오행천간[일간idx];
+
+  const now=new Date();
+  const 오늘jd=julianDay(now.getFullYear(),now.getMonth()+1,now.getDate());
+  const 오늘간idx=(오늘jd+9)%10; const 오늘지idx=(오늘jd+1)%12;
+  const 오늘간=천간[오늘간idx]; const 오늘지=지지[오늘지idx];
+  const 오늘오행=오행천간[오늘간idx];
+
+  const 상생={목:'화',화:'토',토:'금',금:'수',수:'목'};
+  const 상극={목:'토',화:'금',토:'수',금:'목',수:'화'};
+  const 관계=상생[일간오행]===오늘오행?'상생(도움)':상극[일간오행]===오늘오행?'상극(주의)':일간오행===오늘오행?'비화(평온)':'보통';
+  const 관계색=관계.includes('상생')?'#34d399':관계.includes('상극')?'#f87171':'#fbbf24';
+
+  const stats = calcStats();
+  const s = stats.find(x=>x.name===name);
+  const today = new Date().toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'long'});
+  const todaySeed = new Date().toISOString().slice(0,10);
+
+  const prompt = `당신은 사주명리학 전문가이자 테니스 운세 마스터입니다.
+【${name}님의 사주】
+- 년주: ${년간} ${년지} (${띠}띠, ${음양천간[년간idx]}${오행한자[오행천간[년간idx]]})
+- 월주: ${월간} ${월지} (${오행한자[오행천간[월간idx]]})
+- 일주(일간): ${일간} ${일지} (${음양천간[일간idx]}${오행한자[일간오행]}) ← 가장 중요
+- 테니스 성적: ${s?`${s.wins}승 ${s.draws}무 ${s.losses}패, 승률 ${s.wr}%`:'초보자'}
+【오늘의 일주】
+- 오늘: ${오늘간} ${오늘지} (${오행한자[오늘오행]})
+- 일간과 오늘의 관계: ${관계}
+- 오늘 날짜: ${today} (시드: ${todaySeed})
+일간(${일간})의 특성과 오늘 기운(${오늘간}${오늘지})의 상생/상극 관계를 반영해서 ${name}님의 테니스 운세를 작성하세요.
+같은 생년월일+날짜는 항상 같은 운세.
+JSON 형식으로만 답하세요:
+{"overall":"전체운 한 줄 이모지","score":숫자1-5,"saju_analysis":"일간 특성과 오늘 기운 분석 2문장","game":"게임운 2문장","partner":"파트너운 1-2문장","advice":"사주 기반 테니스 조언 1문장","lucky_position":"포(Fore) 또는 백(Back) 오행 근거","lucky_color":"오행에 맞는 색상","warning":"주의사항 1문장","energy":"오늘 에너지 한마디"}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
+    const data = await res.json();
+    const text = data.content?.map(c=>c.text||'').join('');
+    const fortune = JSON.parse(text.replace(/```json|```/g,'').trim());
+    const stars='⭐'.repeat(fortune.score)+'☆'.repeat(5-fortune.score);
+    el.innerHTML=`
+      <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:16px;padding:20px;margin-bottom:12px">
+        <div style="display:flex;justify-content:center;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+          ${[['년주',년간+년지],['월주',월간+월지],['일주',일간+일지]].map(([lb,v])=>`
+          <div style="background:rgba(8,28,75,0.7);border-radius:8px;padding:5px 10px;text-align:center">
+            <div style="font-size:9px;color:#4a8ab5">${lb}</div>
+            <div style="font-size:13px;font-weight:800;color:#e8edf2">${v}</div>
+          </div>`).join('')}
+          <div style="background:rgba(8,28,75,0.7);border-radius:8px;padding:5px 10px;text-align:center;border:1px solid ${관계색}44">
+            <div style="font-size:9px;color:#4a8ab5">오늘기운</div>
+            <div style="font-size:11px;font-weight:700;color:${관계색}">${관계}</div>
+          </div>
+        </div>
+        <div style="text-align:center;margin-bottom:16px">
+          <div style="font-size:20px;font-weight:900;color:#e8edf2;margin-bottom:6px">${fortune.overall}</div>
+          <div style="font-size:22px;margin:4px 0">${stars}</div>
+          <div style="font-size:12px;color:#4a8ab5">테니스 운 ${fortune.score}/5</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="background:rgba(124,58,237,0.15);border-radius:10px;padding:12px;border-left:3px solid #a78bfa">
+            <div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:6px">✨ 일간 ${일간}(${오행한자[일간오행]}) · 오늘 ${오늘간}${오늘지}(${오행한자[오늘오행]})</div>
+            <div style="font-size:12px;color:#c4b5fd;line-height:1.6">${fortune.saju_analysis}</div>
+          </div>
+          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
+            <div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:6px">🎾 게임운</div>
+            <div style="font-size:13px;color:#e8edf2;line-height:1.6">${fortune.game}</div>
+          </div>
+          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
+            <div style="font-size:11px;color:#60a5fa;font-weight:700;margin-bottom:6px">🤝 파트너운</div>
+            <div style="font-size:13px;color:#e8edf2;line-height:1.6">${fortune.partner}</div>
+          </div>
+          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
+            <div style="font-size:11px;color:#34d399;font-weight:700;margin-bottom:6px">💡 오행 기반 조언</div>
+            <div style="font-size:13px;color:#e8edf2;line-height:1.6">${fortune.advice}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:10px;color:#4a8ab5;margin-bottom:4px">🎯 행운의 포지션</div>
+              <div style="font-size:13px;font-weight:800;color:#f59e0b">${fortune.lucky_position}</div>
+            </div>
+            <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:10px;color:#4a8ab5;margin-bottom:4px">🎨 오행 행운색</div>
+              <div style="font-size:13px;font-weight:800;color:#f472b6">${fortune.lucky_color}</div>
+            </div>
+          </div>
+          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px;border-left:3px solid ${관계색}">
+            <div style="font-size:11px;color:${관계색};font-weight:700;margin-bottom:4px">⚡ 오늘의 에너지 (${관계})</div>
+            <div style="font-size:12px;color:#e8edf2">${fortune.energy}</div>
+          </div>
+          <div style="background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.25);border-radius:10px;padding:12px">
+            <div style="font-size:11px;color:#f87171;font-weight:700;margin-bottom:6px">⚠️ 주의사항</div>
+            <div style="font-size:13px;color:#e8edf2;line-height:1.6">${fortune.warning}</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:#4a6a8a;text-align:center">${name}님 일간 ${일간}(${띠}띠) · ${today} 사주 운세 🔮</div>`;
+  } catch(e) {
+    el.innerHTML=`<div style="text-align:center;padding:20px;color:#f87171">운세를 불러오지 못했어요 😢<br><small style="color:#4a8ab5">잠시 후 다시 시도해주세요</small></div>`;
+  }
 };
 window.switchSub=function(sub,btn){
   ['bracket','ranking','analysis'].forEach(s=>document.getElementById('sub-'+s).style.display=s===sub?'block':'none');
