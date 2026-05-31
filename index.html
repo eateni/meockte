@@ -2508,20 +2508,20 @@ function initFortune() {
   }
 }
 
-window.getFortune = async function() {
+window.getFortune = function() {
   const name = document.getElementById('fortuneNameSel').value;
   const birth = document.getElementById('fortuneBirth').value;
   if(!name){ alert('이름을 선택해주세요'); return; }
   if(!birth){ alert('생년월일을 입력해주세요'); return; }
 
   const el = document.getElementById('fortuneResult');
-  el.innerHTML = `<div style="text-align:center;padding:30px;color:#a78bfa">
-    <div style="font-size:32px;margin-bottom:12px">🔮</div>
-    <div style="font-size:14px">사주를 분석하는 중...</div>
-    <div style="font-size:11px;color:#4a8ab5;margin-top:6px">오행의 기운을 읽고 있어요</div>
+  el.innerHTML = `<div style="text-align:center;padding:20px;color:#a78bfa">
+    <div style="font-size:28px;margin-bottom:8px">🔮</div>
+    <div style="font-size:13px">사주를 분석하는 중...</div>
   </div>`;
 
-  // ── 사주 계산 ──
+  setTimeout(() => {
+  // ── 사주 계산 ──────────────────────────────────────────────
   const 천간 = ['甲갑','乙을','丙병','丁정','戊무','己기','庚경','辛신','壬임','癸계'];
   const 지지 = ['子자','丑축','寅인','卯묘','辰진','巳사','午오','未미','申신','酉유','戌술','亥해'];
   const 띠이름 = ['쥐','소','호랑이','토끼','용','뱀','말','양','원숭이','닭','개','돼지'];
@@ -2531,118 +2531,195 @@ window.getFortune = async function() {
 
   const bd = new Date(birth);
   const by = bd.getFullYear(), bm = bd.getMonth()+1, bday = bd.getDate();
-
-  const 년간idx = (by-4)%10; const 년지idx = (by-4)%12;
-  const 년간 = 천간[년간idx]; const 년지 = 지지[년지idx];
-  const 띠 = 띠이름[년지idx];
-
-  const 월경계 = [6,4,6,5,6,6,7,8,8,8,7,7];
-  const 월지idx = bday >= 월경계[bm-1] ? (bm+1)%12 : bm%12;
-  const 월간idx = ((by-4)%5*2 + 월지idx) % 10;
-  const 월간 = 천간[월간idx]; const 월지 = 지지[월지idx];
-
+  const 년간idx=(by-4)%10, 년지idx=(by-4)%12;
+  const 년간=천간[년간idx], 년지=지지[년지idx], 띠=띠이름[년지idx];
+  const 월경계=[6,4,6,5,6,6,7,8,8,8,7,7];
+  const 월지idx=bday>=월경계[bm-1]?(bm+1)%12:bm%12;
+  const 월간idx=((by-4)%5*2+월지idx)%10;
+  const 월간=천간[월간idx], 월지=지지[월지idx];
   function julianDay(y,m,d){if(m<=2){y--;m+=12;}const A=Math.floor(y/100),B=2-A+Math.floor(A/4);return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524;}
-  const jd = julianDay(by,bm,bday);
-  const 일간idx=(jd+9)%10; const 일지idx=(jd+1)%12;
-  const 일간=천간[일간idx]; const 일지=지지[일지idx];
-  const 일간오행=오행천간[일간idx];
-
+  const jd=julianDay(by,bm,bday);
+  const 일간idx=(jd+9)%10, 일지idx=(jd+1)%12;
+  const 일간=천간[일간idx], 일지=지지[일지idx], 일간오행=오행천간[일간idx];
   const now=new Date();
   const 오늘jd=julianDay(now.getFullYear(),now.getMonth()+1,now.getDate());
-  const 오늘간idx=(오늘jd+9)%10; const 오늘지idx=(오늘jd+1)%12;
-  const 오늘간=천간[오늘간idx]; const 오늘지=지지[오늘지idx];
-  const 오늘오행=오행천간[오늘간idx];
-
+  const 오늘간idx=(오늘jd+9)%10, 오늘지idx=(오늘jd+1)%12;
+  const 오늘간=천간[오늘간idx], 오늘지=지지[오늘지idx], 오늘오행=오행천간[오늘간idx];
   const 상생={목:'화',화:'토',토:'금',금:'수',수:'목'};
   const 상극={목:'토',화:'금',토:'수',금:'목',수:'화'};
-  const 관계=상생[일간오행]===오늘오행?'상생(도움)':상극[일간오행]===오늘오행?'상극(주의)':일간오행===오늘오행?'비화(평온)':'보통';
-  const 관계색=관계.includes('상생')?'#34d399':관계.includes('상극')?'#f87171':'#fbbf24';
+  const 관계=상생[일간오행]===오늘오행?'상생':상극[일간오행]===오늘오행?'상극':일간오행===오늘오행?'비화':'보통';
+  const 관계색={상생:'#34d399',상극:'#f87171',비화:'#60a5fa',보통:'#fbbf24'}[관계];
+  const 관계텍스트={상생:'상생(도움)',상극:'상극(주의)',비화:'비화(평온)',보통:'보통'}[관계];
 
-  const stats = calcStats();
-  const s = stats.find(x=>x.name===name);
+  // ── 시드 기반 랜덤 ──────────────────────────────────────────
+  const seed = by*10000+bm*100+bday + now.getFullYear()*10000+(now.getMonth()+1)*100+now.getDate();
+  let s = seed;
+  function rand(n){ s=(s*1664525+1013904223)&0xffffffff; return Math.abs(s)%n; }
+  function pick(arr){ return arr[rand(arr.length)]; }
+
+  // ── 오행별 운세 텍스트 풀 ───────────────────────────────────
+  const 오행특성 = {
+    목: ['성장과 도전의 木 기운','유연하고 끈질긴 木의 에너지','뻗어나가는 木의 기운'],
+    화: ['열정과 집중의 火 기운','활활 타오르는 火의 에너지','빛나는 火의 기운'],
+    토: ['안정과 중심의 土 기운','묵직하고 믿음직한 土의 에너지','든든한 土의 기운'],
+    금: ['예리하고 결단력 있는 金 기운','날카로운 金의 에너지','정확한 金의 기운'],
+    수: ['지혜와 흐름의 水 기운','유연하게 흐르는 水의 에너지','깊고 차분한 水의 기운']
+  };
+  const 관계별게임운 = {
+    상생: [
+      '오늘은 기운이 잘 흘러 몸이 가볍게 느껴질 거예요. 서브와 리턴이 평소보다 잘 맞을 것 같아요.',
+      '상생의 기운이 흐르는 날! 파트너와 호흡이 잘 맞고 팀플레이가 빛날 가능성이 높아요.',
+      '오늘은 오행이 도와주는 날이에요. 과감하게 네트플레이를 시도해보세요, 성공률이 높을 거예요.',
+      '에너지가 자연스럽게 흐르는 좋은 날이에요. 전반전보다 후반전에 더 강해지는 흐름이 예상돼요.'
+    ],
+    상극: [
+      '오늘은 몸이 약간 무거울 수 있어요. 무리하기보다 기본기에 충실한 경기를 추천해요.',
+      '상극의 기운이 있는 날이지만, 오히려 집중력이 높아지는 유형이에요. 실수를 줄이는 데 집중하세요.',
+      '오늘은 욕심을 버리고 안정적인 플레이가 최선이에요. 무리한 공격보다 랠리를 길게 가져가세요.',
+      '기운이 충돌하는 날이에요. 워밍업을 충분히 하고 첫 게임부터 서두르지 마세요.'
+    ],
+    비화: [
+      '같은 오행끼리 만나 평온하고 안정적인 날이에요. 기복 없이 꾸준한 경기를 펼칠 수 있을 거예요.',
+      '비화의 날은 큰 변수가 없어요. 컨디션 관리만 잘 하면 안정적인 승부를 기대할 수 있어요.',
+      '오늘은 평소 실력이 그대로 드러나는 날이에요. 기본기가 탄탄하다면 좋은 결과가 따를 거예요.'
+    ],
+    보통: [
+      '오늘은 특별히 강하지도 약하지도 않은 평범한 기운의 날이에요. 컨디션에 맞게 조율해보세요.',
+      '보통의 기운이지만, 마음가짐에 따라 얼마든지 좋은 경기가 될 수 있어요.',
+      '평범한 기운의 날일수록 전술이 중요해요. 상대 약점을 잘 파고드는 경기를 해보세요.'
+    ]
+  };
+  const 파트너운 = [
+    '오늘은 파트너와 눈이 잘 맞는 날이에요. 서로 믿고 맡겨보세요.',
+    '파트너의 강점이 빛나는 날이니, 먼저 기회를 만들어주는 플레이가 효과적이에요.',
+    '오늘은 파트너보다 내가 더 적극적으로 나서야 할 날이에요. 리더십을 발휘해보세요.',
+    '파트너와의 소통이 중요한 날이에요. 경기 전에 간단한 작전을 미리 맞춰두세요.',
+    '오늘 파트너 운이 좋아요! 파트너를 믿고 후방을 단단히 지켜보세요.',
+    '파트너와 역할 분담이 잘 될 것 같아요. 각자 포지션에 충실하면 시너지가 날 거예요.'
+  ];
+  const 조언풀 = {
+    목: ['백핸드 스트로크를 더 적극적으로 활용해보세요','네트 전진 후 발리 연결을 연습해보세요','상대 백코트로 깊은 공을 보내는 전술이 오늘 잘 먹힐 거예요'],
+    화: ['강한 첫 서브로 주도권을 잡는 것이 오늘의 핵심이에요','포핸드 공격을 적극적으로 사용하는 날이에요','에너지가 넘치는 날이니 공격적인 플레이로 승부하세요'],
+    토: ['안정적인 크로스 코트 랠리로 상대를 지치게 만드세요','실수를 줄이는 것이 오늘의 최선 전략이에요','깊고 묵직한 스트로크로 상대 리듬을 흔들어보세요'],
+    금: ['정확한 코스 공략이 오늘의 핵심이에요. 빈 코트를 노리세요','서브 앤 발리 전술이 잘 통할 것 같아요','상대의 패턴을 빠르게 파악하고 허점을 공략해보세요'],
+    수: ['리턴 게임에 집중하는 날이에요. 상대 서브를 잘 읽어보세요','흐름을 읽고 때를 기다리는 플레이가 오늘 빛날 거예요','슬라이스와 드롭샷으로 상대 리듬을 무너뜨려보세요']
+  };
+  const 행운포지션 = {
+    목: '백(Back) — 木의 뻗어나가는 기운이 스트로크에 힘을 줘요',
+    화: '포(Fore) — 火의 공격적 에너지가 네트 앞에서 빛나요',
+    토: '백(Back) — 土의 안정감이 베이스라인 수비를 강화해요',
+    금: '포(Fore) — 金의 날카로움이 발리에서 최고로 빛나요',
+    수: '백(Back) — 水의 유연함이 스트로크 리듬감을 높여줘요'
+  };
+  const 행운색 = {목:'초록색',화:'빨간색',토:'노란색',금:'흰색',수:'파란색'};
+  const 주의사항 = {
+    상생: ['승리에 도취되어 방심하지 마세요. 끝까지 집중!','좋은 흐름이라도 무리한 공격은 자제해요.','기운이 좋다고 무리하다간 부상 위험이 있어요.'],
+    상극: ['오늘은 감정 기복을 조심하세요. 실수해도 평정심 유지!','상대에게 말리지 않도록 자신의 리듬을 지키세요.','에너지 소모가 클 수 있어요. 수분 보충에 신경 쓰세요.'],
+    비화: ['너무 편안하게 생각하다 집중력이 흐트러질 수 있어요.','평온한 날일수록 긴장의 끈을 놓지 마세요.'],
+    보통: ['특별히 조심할 것은 없지만, 준비운동만큼은 꼭 하세요.','오늘은 욕심 없이 즐기는 테니스가 최고예요.']
+  };
+  const 전체운 = {
+    상생: ['오늘은 테니스 신이 내 편! 마음껏 뛰어보세요 ☀️','기운이 넘치는 날! 코트 위의 주인공은 나 🎾','상생의 기운으로 무장, 오늘 승리는 내 것 🏆','오늘은 뭘 해도 잘 되는 날! 자신있게 가세요 ⚡'],
+    상극: ['어려운 날일수록 진짜 실력이 드러나요 💪','역경을 이겨내는 당신, 오늘도 파이팅 🔥','힘든 기운이지만 버티면 반드시 기회가 와요 🌙','조심스럽게, 하지만 포기하지 말고! 🎯'],
+    비화: ['오늘은 평온하게 내 테니스를 즐기는 날 😌','잔잔하지만 든든한 기운이 함께해요 ⚖️','기복 없이 꾸준하게, 오늘의 나는 안정적 🌊'],
+    보통: ['평범한 날도 코트 위에선 특별할 수 있어요 🌟','오늘은 즐기는 테니스가 최고! 결과는 덤 🎾','무난한 기운이지만 노력이 결과를 만들어요 💫']
+  };
+  const 에너지문구 = {
+    상생: ['오늘 당신의 오행이 날개를 달았어요! 자신감 있게 코트를 누비세요.','기운이 서로 돕는 날! 몸이 자연스럽게 움직일 거예요.','상생의 흐름을 타고 오늘의 에너지를 최대로 발휘해보세요.'],
+    상극: ['부딪히는 기운이지만, 마찰이 강함을 만들어요. 오늘의 도전을 즐겨보세요.','어려운 기운 속에서도 당신의 내공이 빛날 거예요.','상극의 날은 집중력이 오히려 높아지는 날이에요.'],
+    비화: ['같은 기운끼리 만난 평화로운 날. 편안한 마음으로 임해요.','잔잔한 날의 에너지는 지구력으로 나타나요.'],
+    보통: ['평범한 에너지지만, 당신의 열정이 더해지면 특별해져요.','오늘의 기운은 중립! 내 마음가짐이 결과를 결정해요.']
+  };
+
+  // ── 점수 계산 (사주 기반) ──────────────────────────────────
+  const 기본점수 = {상생:4, 보통:3, 비화:3, 상극:2}[관계];
+  const 보정 = rand(2); // 0 or 1
+  const score = Math.min(5, Math.max(1, 기본점수 + 보정));
+  const stars = '⭐'.repeat(score)+'☆'.repeat(5-score);
+
   const today = new Date().toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'long'});
-  const todaySeed = new Date().toISOString().slice(0,10);
 
-  const prompt = `당신은 사주명리학 전문가이자 테니스 운세 마스터입니다.
-【${name}님의 사주】
-- 년주: ${년간} ${년지} (${띠}띠, ${음양천간[년간idx]}${오행한자[오행천간[년간idx]]})
-- 월주: ${월간} ${월지} (${오행한자[오행천간[월간idx]]})
-- 일주(일간): ${일간} ${일지} (${음양천간[일간idx]}${오행한자[일간오행]}) ← 가장 중요
-- 테니스 성적: ${s?`${s.wins}승 ${s.draws}무 ${s.losses}패, 승률 ${s.wr}%`:'초보자'}
-【오늘의 일주】
-- 오늘: ${오늘간} ${오늘지} (${오행한자[오늘오행]})
-- 일간과 오늘의 관계: ${관계}
-- 오늘 날짜: ${today} (시드: ${todaySeed})
-일간(${일간})의 특성과 오늘 기운(${오늘간}${오늘지})의 상생/상극 관계를 반영해서 ${name}님의 테니스 운세를 작성하세요.
-같은 생년월일+날짜는 항상 같은 운세.
-JSON 형식으로만 답하세요:
-{"overall":"전체운 한 줄 이모지","score":숫자1-5,"saju_analysis":"일간 특성과 오늘 기운 분석 2문장","game":"게임운 2문장","partner":"파트너운 1-2문장","advice":"사주 기반 테니스 조언 1문장","lucky_position":"포(Fore) 또는 백(Back) 오행 근거","lucky_color":"오행에 맞는 색상","warning":"주의사항 1문장","energy":"오늘 에너지 한마디"}`;
+  el.innerHTML = `
+    <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:16px;padding:20px;margin-bottom:12px">
 
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
-    const data = await res.json();
-    const text = data.content?.map(c=>c.text||'').join('');
-    const fortune = JSON.parse(text.replace(/```json|```/g,'').trim());
-    const stars='⭐'.repeat(fortune.score)+'☆'.repeat(5-fortune.score);
-    el.innerHTML=`
-      <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:16px;padding:20px;margin-bottom:12px">
-        <div style="display:flex;justify-content:center;gap:6px;margin-bottom:14px;flex-wrap:wrap">
-          ${[['년주',년간+년지],['월주',월간+월지],['일주',일간+일지]].map(([lb,v])=>`
-          <div style="background:rgba(8,28,75,0.7);border-radius:8px;padding:5px 10px;text-align:center">
-            <div style="font-size:9px;color:#4a8ab5">${lb}</div>
-            <div style="font-size:13px;font-weight:800;color:#e8edf2">${v}</div>
-          </div>`).join('')}
-          <div style="background:rgba(8,28,75,0.7);border-radius:8px;padding:5px 10px;text-align:center;border:1px solid ${관계색}44">
-            <div style="font-size:9px;color:#4a8ab5">오늘기운</div>
-            <div style="font-size:11px;font-weight:700;color:${관계색}">${관계}</div>
-          </div>
-        </div>
-        <div style="text-align:center;margin-bottom:16px">
-          <div style="font-size:20px;font-weight:900;color:#e8edf2;margin-bottom:6px">${fortune.overall}</div>
-          <div style="font-size:22px;margin:4px 0">${stars}</div>
-          <div style="font-size:12px;color:#4a8ab5">테니스 운 ${fortune.score}/5</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="background:rgba(124,58,237,0.15);border-radius:10px;padding:12px;border-left:3px solid #a78bfa">
-            <div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:6px">✨ 일간 ${일간}(${오행한자[일간오행]}) · 오늘 ${오늘간}${오늘지}(${오행한자[오늘오행]})</div>
-            <div style="font-size:12px;color:#c4b5fd;line-height:1.6">${fortune.saju_analysis}</div>
-          </div>
-          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
-            <div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:6px">🎾 게임운</div>
-            <div style="font-size:13px;color:#e8edf2;line-height:1.6">${fortune.game}</div>
-          </div>
-          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
-            <div style="font-size:11px;color:#60a5fa;font-weight:700;margin-bottom:6px">🤝 파트너운</div>
-            <div style="font-size:13px;color:#e8edf2;line-height:1.6">${fortune.partner}</div>
-          </div>
-          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
-            <div style="font-size:11px;color:#34d399;font-weight:700;margin-bottom:6px">💡 오행 기반 조언</div>
-            <div style="font-size:13px;color:#e8edf2;line-height:1.6">${fortune.advice}</div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px;text-align:center">
-              <div style="font-size:10px;color:#4a8ab5;margin-bottom:4px">🎯 행운의 포지션</div>
-              <div style="font-size:13px;font-weight:800;color:#f59e0b">${fortune.lucky_position}</div>
-            </div>
-            <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px;text-align:center">
-              <div style="font-size:10px;color:#4a8ab5;margin-bottom:4px">🎨 오행 행운색</div>
-              <div style="font-size:13px;font-weight:800;color:#f472b6">${fortune.lucky_color}</div>
-            </div>
-          </div>
-          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px;border-left:3px solid ${관계색}">
-            <div style="font-size:11px;color:${관계색};font-weight:700;margin-bottom:4px">⚡ 오늘의 에너지 (${관계})</div>
-            <div style="font-size:12px;color:#e8edf2">${fortune.energy}</div>
-          </div>
-          <div style="background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.25);border-radius:10px;padding:12px">
-            <div style="font-size:11px;color:#f87171;font-weight:700;margin-bottom:6px">⚠️ 주의사항</div>
-            <div style="font-size:13px;color:#e8edf2;line-height:1.6">${fortune.warning}</div>
-          </div>
+      <!-- 사주 정보 -->
+      <div style="display:flex;justify-content:center;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+        ${[['년주',년간+년지],['월주',월간+월지],['일주',일간+일지]].map(([lb,v])=>`
+        <div style="background:rgba(8,28,75,0.7);border-radius:8px;padding:5px 10px;text-align:center">
+          <div style="font-size:9px;color:#4a8ab5">${lb}</div>
+          <div style="font-size:13px;font-weight:800;color:#e8edf2">${v}</div>
+        </div>`).join('')}
+        <div style="background:rgba(8,28,75,0.7);border-radius:8px;padding:5px 10px;text-align:center;border:1px solid ${관계색}55">
+          <div style="font-size:9px;color:#4a8ab5">오늘기운</div>
+          <div style="font-size:11px;font-weight:700;color:${관계색}">${관계텍스트}</div>
         </div>
       </div>
-      <div style="font-size:10px;color:#4a6a8a;text-align:center">${name}님 일간 ${일간}(${띠}띠) · ${today} 사주 운세 🔮</div>`;
-  } catch(e) {
-    el.innerHTML=`<div style="text-align:center;padding:20px;color:#f87171">운세를 불러오지 못했어요 😢<br><small style="color:#4a8ab5">잠시 후 다시 시도해주세요</small></div>`;
-  }
+
+      <!-- 헤더 -->
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:20px;font-weight:900;color:#e8edf2;margin-bottom:6px">${pick(전체운[관계])}</div>
+        <div style="font-size:22px;margin:4px 0">${stars}</div>
+        <div style="font-size:12px;color:#4a8ab5">테니스 운 ${score}/5</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <!-- 사주 분석 -->
+        <div style="background:rgba(124,58,237,0.15);border-radius:10px;padding:12px;border-left:3px solid #a78bfa">
+          <div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:6px">
+            ✨ 일간 ${일간}(${오행한자[일간오행]}) · 오늘 ${오늘간}${오늘지}(${오행한자[오늘오행]})
+          </div>
+          <div style="font-size:12px;color:#c4b5fd;line-height:1.6">
+            ${name}님의 일간은 <strong>${일간}(${pick(오행특성[일간오행])})</strong>이에요.
+            오늘 ${오늘오행} 기운과 <strong>${관계텍스트}</strong> 관계라 ${pick(에너지문구[관계])}
+          </div>
+        </div>
+
+        <!-- 게임운 -->
+        <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:6px">🎾 게임운</div>
+          <div style="font-size:13px;color:#e8edf2;line-height:1.6">${pick(관계별게임운[관계])}</div>
+        </div>
+
+        <!-- 파트너운 -->
+        <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:#60a5fa;font-weight:700;margin-bottom:6px">🤝 파트너운</div>
+          <div style="font-size:13px;color:#e8edf2;line-height:1.6">${pick(파트너운)}</div>
+        </div>
+
+        <!-- 조언 -->
+        <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:#34d399;font-weight:700;margin-bottom:6px">💡 오행 기반 조언</div>
+          <div style="font-size:13px;color:#e8edf2;line-height:1.6">${pick(조언풀[일간오행])}</div>
+        </div>
+
+        <!-- 행운 정보 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px">
+            <div style="font-size:10px;color:#4a8ab5;margin-bottom:6px">🎯 행운의 포지션</div>
+            <div style="font-size:12px;font-weight:700;color:#f59e0b;line-height:1.4">${행운포지션[일간오행]}</div>
+          </div>
+          <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:10px;color:#4a8ab5;margin-bottom:6px">🎨 오행 행운색</div>
+            <div style="font-size:18px;font-weight:900;color:#f472b6">${행운색[일간오행]}</div>
+            <div style="font-size:10px;color:#4a8ab5;margin-top:2px">${오행한자[일간오행]}</div>
+          </div>
+        </div>
+
+        <!-- 에너지 -->
+        <div style="background:rgba(8,28,75,0.6);border-radius:10px;padding:12px;border-left:3px solid ${관계색}">
+          <div style="font-size:11px;color:${관계색};font-weight:700;margin-bottom:4px">⚡ 오늘의 에너지</div>
+          <div style="font-size:12px;color:#e8edf2;line-height:1.5">${pick(에너지문구[관계])}</div>
+        </div>
+
+        <!-- 주의사항 -->
+        <div style="background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.25);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:#f87171;font-weight:700;margin-bottom:6px">⚠️ 주의사항</div>
+          <div style="font-size:13px;color:#e8edf2;line-height:1.6">${pick(주의사항[관계])}</div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:#4a6a8a;text-align:center">${name}님 일간 ${일간}(${띠}띠) · ${today} 사주 운세 🔮</div>`;
+  }, 800);
 };
 window.switchSub=function(sub,btn){
   ['bracket','ranking','analysis'].forEach(s=>document.getElementById('sub-'+s).style.display=s===sub?'block':'none');
