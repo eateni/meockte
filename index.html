@@ -2534,7 +2534,7 @@ window.getFortune = function() {
   const 년간idx=(by-4)%10, 년지idx=(by-4)%12;
   const 년간=천간[년간idx], 년지=지지[년지idx], 띠=띠이름[년지idx];
   const 월경계=[6,4,6,5,6,6,7,8,8,8,7,7];
-  const 월지idx=bday>=월경계[bm-1]?(bm+1)%12:bm%12;
+  const 월지idx=bday>=월경계[bm-1]?bm%12:(bm-1+12)%12;
   const 월간idx=((by-4)%5*2+월지idx)%10;
   const 월간=천간[월간idx], 월지=지지[월지idx];
   function julianDay(y,m,d){if(m<=2){y--;m+=12;}const A=Math.floor(y/100),B=2-A+Math.floor(A/4);return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524;}
