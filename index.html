@@ -2416,9 +2416,13 @@ function renderAdmin(){
   // ── 정규 회원 칩 ──
   document.getElementById('memberChips').innerHTML = members.length
     ? members.map(m=>`
-        <span class="chip">
+        <span class="chip" style="display:inline-flex;align-items:center;gap:4px">
           <span class="${m.gender==='f'?'g-f':'g-m'}">${m.gender==='f'?'♀':'♂'}</span>
           ${m.name}
+          <button onclick="renameMember('${m.name}')" title="이름 변경"
+            style="background:none;border:none;color:#60a5fa;font-size:12px;cursor:pointer;padding:0 2px">✏️</button>
+          <button onclick="demoteMember('${m.name}')" title="게스트로 전환"
+            style="background:none;border:none;color:#fbbf24;font-size:12px;cursor:pointer;padding:0 2px">⬇️</button>
           <button class="chip-x" onclick="delMember('${m.name}')">×</button>
         </span>`).join('')
     : '<span style="color:#4a8ab5;font-size:12px">등록된 회원 없음</span>';
@@ -2426,10 +2430,14 @@ function renderAdmin(){
   // ── 게스트 칩 (버그 수정) ──
   document.getElementById('guestChips').innerHTML = guests.length
     ? guests.map(g=>`
-        <span class="chip chip-guest">
+        <span class="chip chip-guest" style="display:inline-flex;align-items:center;gap:4px">
           <span class="g-guest">👤</span>
           <span class="${g.gender==='f'?'g-f':'g-m'}">${g.gender==='f'?'♀':'♂'}</span>
           ${g.name}
+          <button onclick="renameGuest('${g.name}')" title="이름 변경"
+            style="background:none;border:none;color:#60a5fa;font-size:12px;cursor:pointer;padding:0 2px">✏️</button>
+          <button onclick="promoteGuest('${g.name}')" title="정규회원으로 전환"
+            style="background:none;border:none;color:#34d399;font-size:12px;cursor:pointer;padding:0 2px">⬆️</button>
           <button class="chip-x" onclick="delGuest('${g.name}')">×</button>
         </span>`).join('')
     : '<span style="color:#4a8ab5;font-size:12px">등록된 게스트 없음</span>';
@@ -2991,6 +2999,113 @@ window.addGuest=async function(){
 window.delGuest=async function(name){
   if(!confirm(`${name}을(를) 삭제할까요?\n\n* 게스트 통계와 개인별 분석에서 자동으로 제외돼요\n* 과거 경기 기록은 보존돼요`))return;
   await setDoc(doc(db,'club','guests'),{list:guests.filter(g=>g.name!==name)});
+};
+
+// ── 과거 경기/기록의 이름 일괄 변경 ──
+async function cascadeRename(oldName, newName) {
+  // 1) days 컬렉션의 모든 경기 team1/team2/positions 이름 변경
+  const dayUpdates = [];
+  days.forEach(day => {
+    let changed = false;
+    const newRounds = (day.rounds||[]).map(r => ({
+      ...r,
+      matches: (r.matches||[]).map(m => {
+        const nm = {...m};
+        if ((m.team1||[]).includes(oldName)) { nm.team1 = m.team1.map(p=>p===oldName?newName:p); changed=true; }
+        if ((m.team2||[]).includes(oldName)) { nm.team2 = m.team2.map(p=>p===oldName?newName:p); changed=true; }
+        if (m.positions && m.positions[oldName]!==undefined) {
+          const np = {...m.positions}; np[newName]=np[oldName]; delete np[oldName]; nm.positions=np; changed=true;
+        }
+        return nm;
+      })
+    }));
+    if (changed) dayUpdates.push(updateDoc(doc(db,'days',day.id),{rounds:newRounds}));
+  });
+  await Promise.all(dayUpdates);
+
+  // 2) terra(개인별 게임 기록) 이름 변경
+  const terraUpdates = [];
+  terraRecords.forEach(r => {
+    const upd = {};
+    if (r.player===oldName) upd.player=newName;
+    if (r.partner===oldName) upd.partner=newName;
+    if (Object.keys(upd).length) terraUpdates.push(updateDoc(doc(db,'terra',r.id),upd));
+  });
+  await Promise.all(terraUpdates);
+
+  // 3) 커플 설정 이름 변경
+  if (couples.some(c=>c.m===oldName||c.f===oldName)) {
+    const newCouples = couples.map(c=>({
+      m: c.m===oldName?newName:c.m,
+      f: c.f===oldName?newName:c.f
+    }));
+    await setDoc(doc(db,'club','couples'),{list:newCouples});
+  }
+
+  // 4) 날짜별 참석자(attendance/guests) 이름 변경
+  const attUpdates = [];
+  days.forEach(day => {
+    let changed = false;
+    const upd = {};
+    if (day.attendance && day.attendance[oldName]!==undefined) {
+      const na = {...day.attendance}; na[newName]=na[oldName]; delete na[oldName]; upd.attendance=na; changed=true;
+    }
+    if ((day.guests||[]).includes(oldName)) {
+      upd.guests = day.guests.map(g=>g===oldName?newName:g); changed=true;
+    }
+    if (changed) attUpdates.push(updateDoc(doc(db,'days',day.id),upd));
+  });
+  await Promise.all(attUpdates);
+}
+
+// ── 게스트 이름 변경 ──
+window.renameGuest = async function(oldName){
+  const newName = prompt(`"${oldName}"의 새 이름을 입력하세요:`, oldName);
+  if (newName===null) return;
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed===oldName) return;
+  if (allPlayers().find(p=>p.name===trimmed)) { alert('이미 있는 이름이에요'); return; }
+  if (!confirm(`"${oldName}" → "${trimmed}"\n과거 경기 기록의 이름도 모두 함께 바뀌어요. 계속할까요?`)) return;
+
+  const g = guests.find(x=>x.name===oldName);
+  await setDoc(doc(db,'club','guests'),{list:guests.map(x=>x.name===oldName?{...x,name:trimmed}:x)});
+  await cascadeRename(oldName, trimmed);
+  alert(`✅ "${trimmed}"으로 변경 완료!`);
+};
+
+// ── 정규회원 이름 변경 ──
+window.renameMember = async function(oldName){
+  const newName = prompt(`"${oldName}"의 새 이름을 입력하세요:`, oldName);
+  if (newName===null) return;
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed===oldName) return;
+  if (allPlayers().find(p=>p.name===trimmed)) { alert('이미 있는 이름이에요'); return; }
+  if (!confirm(`"${oldName}" → "${trimmed}"\n과거 경기 기록의 이름도 모두 함께 바뀌어요. 계속할까요?`)) return;
+
+  await setDoc(doc(db,'club','members'),{list:members.map(x=>x.name===oldName?{...x,name:trimmed}:x)});
+  await cascadeRename(oldName, trimmed);
+  alert(`✅ "${trimmed}"으로 변경 완료!`);
+};
+
+// ── 게스트 → 정규회원 전환 ──
+window.promoteGuest = async function(name){
+  const g = guests.find(x=>x.name===name);
+  if (!g) return;
+  if (!confirm(`"${name}"을(를) 정규회원으로 전환할까요?\n\n* 과거 경기 기록이 모두 정규 통계에 반영돼요\n* 랭킹/성적표에 정식으로 나타나요`)) return;
+  // 게스트 목록에서 제거 + 회원 목록에 추가
+  await setDoc(doc(db,'club','guests'),{list:guests.filter(x=>x.name!==name)});
+  await setDoc(doc(db,'club','members'),{list:[...members,{name:g.name,gender:g.gender}]});
+  alert(`✅ "${name}"이(가) 정규회원이 됐어요!`);
+};
+
+// ── 정규회원 → 게스트 전환 ──
+window.demoteMember = async function(name){
+  const m = members.find(x=>x.name===name);
+  if (!m) return;
+  if (!confirm(`"${name}"을(를) 게스트로 전환할까요?\n\n* 정규 랭킹/성적표에서 빠지고 게스트로 표시돼요\n* 과거 경기 기록은 보존돼요`)) return;
+  await setDoc(doc(db,'club','members'),{list:members.filter(x=>x.name!==name)});
+  await setDoc(doc(db,'club','guests'),{list:[...guests,{name:m.name,gender:m.gender,isGuest:true}]});
+  alert(`✅ "${name}"이(가) 게스트가 됐어요!`);
 };
 
 // 관리자 인증
