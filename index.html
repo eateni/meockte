@@ -284,6 +284,12 @@ body {
 
     <!-- 정규리그 -->
     <div id="tab-league">
+      <!-- 시즌 선택 -->
+      <div style="margin-top:16px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:#4a8ab5;font-weight:700;white-space:nowrap">🗓️ 시즌</span>
+        <select id="seasonSelect" class="row-sel" style="flex:1;font-size:13px;padding:9px" onchange="changeViewSeason()"></select>
+      </div>
+      <div id="seasonNote" style="display:none;margin-top:8px;font-size:11px;color:#fbbf24;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:8px 10px"></div>
       <div class="subtabs" style="margin-top:16px">
         <button class="stab active" onclick="switchSub('bracket',this)">대진표</button>
         <button class="stab" onclick="switchSub('ranking',this)">랭킹</button>
@@ -533,6 +539,13 @@ body {
           <option value="">날짜 선택...</option>
         </select>
         <div id="datePairBody"><div style="color:#4a8ab5;font-size:12px">날짜를 선택하세요</div></div>
+      </div>
+
+      <!-- 시즌 관리 -->
+      <div class="admin-sec">
+        <h3>🗓️ 시즌 관리</h3>
+        <div style="font-size:11px;color:#4a8ab5;margin-bottom:10px">현재 <b id="curSeasonLabel">시즌 1</b> 진행 중 · 마감하면 기록이 보존되고 새 시즌부터 랭킹이 새로 집계돼요</div>
+        <button class="btn-add" style="width:100%;background:#f59e0b;color:#1a120a;font-weight:800" onclick="startNewSeason()">🏁 이번 시즌 마감하고 새 시즌 시작</button>
       </div>
 
       <!-- 날짜별 참석자 관리 -->
@@ -791,6 +804,9 @@ let schedulePage = 0;
 const SCHEDULE_PER_PAGE = 5;
 window.gotoSchedulePage = function(p){ schedulePage = p; renderSchedules(); const el = document.getElementById('scheduleList'); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); };
 let couples = [];  // [{m, f}] 커플/부부
+let currentSeason = 1;      // 현재 진행 시즌
+let viewSeason = 1;         // 화면에서 보고 있는 시즌
+let seasonUserPicked = false; // 사용자가 과거 시즌을 직접 선택했는지
 let pendingScore = null;
 let pendingScoreEdit = null;
 let pendingDayId = null;
@@ -1016,13 +1032,13 @@ window.toggleDayGuest = async function(dayId, guestName) {
   if (idx >= 0) dg.splice(idx,1); else dg.push(guestName);
   await updateDoc(doc(db,'days',dayId), { guests: dg });
 };
-function allRounds() { return days.flatMap(d => (d.rounds||[]).map(r=>({...r,dayId:d.id,date:d.date}))); }
+function allRounds() { return days.filter(d=>(d.season||1)===viewSeason).flatMap(d => (d.rounds||[]).map(r=>({...r,dayId:d.id,date:d.date}))); }
 
 // 개인별 출석일수 계산
 function calcAttendance() {
   const att = {};
   allPlayers().forEach(p => { att[p.name] = 0; });
-  days.forEach(day => {
+  days.filter(d=>(d.season||1)===viewSeason).forEach(day => {
     const dayAtt = day.attendance || {};
     const dayGuests = day.guests || [];
     members.forEach(m => { if (dayAtt[m.name] !== false) att[m.name] = (att[m.name]||0)+1; });
@@ -1907,11 +1923,54 @@ window.deleteDayPair = async function(dayId, kind, a, b){
   await updateDoc(doc(db,'days',dayId), { [field]: list });
 };
 
+// ── 시즌 관리 ──────────────────────────────────────────────────────
+function renderSeasonSelect(){
+  const sel = document.getElementById('seasonSelect');
+  if(sel){
+    let html='';
+    for(let s=currentSeason; s>=1; s--){
+      html += `<option value="${s}">시즌 ${s}${s===currentSeason?' (진행중)':''}</option>`;
+    }
+    sel.innerHTML = html;
+    sel.value = String(viewSeason);
+  }
+  // 과거 시즌 열람 안내 배너
+  const note = document.getElementById('seasonNote');
+  if(note){
+    if(viewSeason !== currentSeason){
+      note.style.display='block';
+      note.textContent = `📖 시즌 ${viewSeason} 기록을 보는 중이에요 (지난 시즌)`;
+    } else {
+      note.style.display='none';
+    }
+  }
+  // 관리자 라벨
+  const lab = document.getElementById('curSeasonLabel');
+  if(lab) lab.textContent = `시즌 ${currentSeason}`;
+}
+window.changeViewSeason = function(){
+  const sel = document.getElementById('seasonSelect'); if(!sel) return;
+  viewSeason = parseInt(sel.value,10) || currentSeason;
+  seasonUserPicked = (viewSeason !== currentSeason);
+  renderAll();
+};
+window.startNewSeason = async function(){
+  if(!confirm(`현재 시즌(시즌 ${currentSeason})을 마감하고\n새로운 시즌 ${currentSeason+1}을 시작할까요?\n\n• 지금까지 모든 기록은 '시즌 ${currentSeason}'으로 보존돼요\n• 새 시즌부터 개인 랭킹/성적이 새로 집계돼요\n• 시즌 선택에서 지난 시즌을 골라 언제든 다시 볼 수 있어요`)) return;
+  try {
+    // season 태그 없는 기존 날짜들을 현재 시즌으로 확정 (백필)
+    const untagged = days.filter(d => d.season == null);
+    for(const d of untagged){ await updateDoc(doc(db,'days',d.id), { season: currentSeason }); }
+    await setDoc(doc(db,'club','season'), { current: currentSeason + 1 });
+    alert(`시즌 ${currentSeason} 마감 완료! 🎾\n이제 시즌 ${currentSeason+1}이 시작되었어요.`);
+  } catch(e){ alert('처리 중 오류가 발생했어요: '+(e&&e.message||e)); }
+};
+
 // ── 렌더 ──────────────────────────────────────────────────────────
 function renderAll() {
   const stats = calcStats();
   renderTop3(stats); renderDays(); renderStats(stats);
   renderRanking(stats); renderAnalysis(stats); renderAdmin();
+  renderSeasonSelect();
   fillScheduleWriter();
 }
 
@@ -2434,7 +2493,7 @@ window.renderAnalysisDetail = function() {
     <!-- 📅 날짜별 승패 기록 -->
     ${(() => {
       const byDay = {};
-      days.forEach(day => {
+      days.filter(d=>(d.season||1)===viewSeason).forEach(day => {
         const dateStr = day.date ? new Date(day.date+'T00:00:00').toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'}) : '날짜미상';
         (day.rounds||[]).forEach(r => {
           (r.matches||[]).forEach(m => {
@@ -3571,7 +3630,7 @@ window.addDay=async function(){
   const date=document.getElementById('dayDate').value;
   const place=document.getElementById('dayPlace').value.trim();
   if(!date){alert('날짜를 선택해주세요');return;}
-  await addDoc(collection(db,'days'),{date,place,rounds:[],createdAt:serverTimestamp()});
+  await addDoc(collection(db,'days'),{date,place,rounds:[],season:currentSeason,createdAt:serverTimestamp()});
   document.getElementById('dayDate').value='';
   document.getElementById('dayPlace').value='';
 };
@@ -3780,6 +3839,11 @@ onSnapshot(collection(db,'terra'), snap => {
   }
 });
 
+onSnapshot(doc(db,'club','season'), snap => {
+  currentSeason = snap.exists() ? (snap.data().current||1) : 1;
+  if (!seasonUserPicked || viewSeason > currentSeason) viewSeason = currentSeason;
+  renderAll();
+});
 onSnapshot(doc(db,'club','couples'), snap => {
   couples = snap.exists() ? (snap.data().list||[]) : [];
   renderAll();
