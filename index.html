@@ -1995,9 +1995,10 @@ function renderTop3(stats) {
 // ── 날짜별 대진표 렌더 ─────────────────────────────────────────────
 function renderDays() {
   const el = document.getElementById('roundList');
-  if (!days.length) { el.innerHTML='<div class="empty">아직 날짜 그룹이 없어요<br><small style="color:#4a8ab5">관리자가 날짜를 추가해요</small></div>'; return; }
+  const seasonDays = days.filter(d=>(d.season||1)===viewSeason);
+  if (!seasonDays.length) { el.innerHTML = `<div class="empty">시즌 ${viewSeason}에 등록된 경기가 없어요<br><small style="color:#4a8ab5">${viewSeason===currentSeason?'관리자가 날짜를 추가하면 여기에 표시돼요':'지난 시즌 기록이 없습니다'}</small></div>`; return; }
 
-  const sorted = [...days].sort((a,b)=>(b.date||'')>(a.date||'')?1:(b.date||'')<(a.date||'')?-1:0);
+  const sorted = [...seasonDays].sort((a,b)=>(b.date||'')>(a.date||'')?1:(b.date||'')<(a.date||'')?-1:0);
 
   el.innerHTML = sorted.map(day => {
     const dateStr = day.date ? new Date(day.date).toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'}) : '날짜 미정';
